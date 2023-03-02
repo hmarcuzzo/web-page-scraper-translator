@@ -1,8 +1,5 @@
 import logging
 import os
-import re
-from pathlib import Path
-from typing import Optional
 from urllib.parse import urlparse
 
 import requests
