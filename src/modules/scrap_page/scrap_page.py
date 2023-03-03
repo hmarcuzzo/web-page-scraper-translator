@@ -81,12 +81,13 @@ class ScrapPage:
             scrap_page.save_page()
 
     def __should_ignore_url(self, url: str) -> bool:
+        file_name = self.__get_file_name(url) + ".html"
+
         base_url = urlparse(self.url).hostname.split(".")[1]
         link_base_url = urlparse(url).hostname.split(".")[1]
-        if base_url != link_base_url:
+        if base_url != link_base_url or f"{base_url}/index.html" in file_name:
             return True
 
-        file_name = self.__get_file_name(url) + ".html"
         return os.path.exists(file_name)
 
     def __link_to_local_file(self, link: Tag, url: str) -> None:
