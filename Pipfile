@@ -6,6 +6,9 @@ name = "pypi"
 [packages]
 beautifulsoup4 = "*"
 requests = "*"
+python-dotenv = "*"
+uuid = "*"
+selenium = "*"
 
 [dev-packages]
 black = "*"

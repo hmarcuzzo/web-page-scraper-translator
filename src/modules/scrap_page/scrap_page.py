@@ -1,9 +1,11 @@
 import logging
 import os
+import time
 from urllib.parse import urlparse
 
-import requests
 from bs4 import BeautifulSoup
+from bs4.element import Tag
+from selenium import webdriver
 
 from config import ROOT_DIR
 from src.core.constants.default_values import DEFAULT_DEPTH_LEVEL
@@ -14,17 +16,21 @@ class ScrapPage:
     def __init__(
         self, url: str, depth_level: int = DEFAULT_DEPTH_LEVEL, path: str = "/static/pages"
     ):
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/58.0.3029.110 Safari/537.36"
-        }
-
-        self.url = url
-        self.page = requests.get(self.url, headers=headers)
-        self.soup = BeautifulSoup(self.page.content, "html.parser")
+        # wait 1 second to avoid being blocked by the server
+        time.sleep(1)
 
         self.depth_level = depth_level
         self.path = path
+
+        self.url = url
+
+        browser = webdriver.Chrome()
+        browser.get(url)
+
+        self.__scroll_down_page(browser)
+
+        self.page = browser.page_source
+        self.soup = BeautifulSoup(self.page, "html.parser")
 
     # -------------------- PUBLIC METHODS --------------------
     def save_page(self) -> None:
@@ -37,9 +43,13 @@ class ScrapPage:
             url = self.url
         parsed_url = urlparse(url)
 
-        path_url = "/index" if os.path.basename(parsed_url.path).strip() == "" else parsed_url.path
-        file_name = parsed_url.hostname.split(".")[1] + path_url
-        return (ROOT_DIR + os.path.join(self.path, file_name)).strip()
+        file_name = f"{parsed_url.hostname.split('.')[1]}{parsed_url.path or '/'}".strip()
+        if file_name.endswith("/"):
+            file_name += "index"
+
+        file_name = os.path.join(self.path, file_name)
+
+        return ROOT_DIR + file_name
 
     def __save_html(self) -> None:
         file_name = self.__get_file_name()
@@ -62,12 +72,34 @@ class ScrapPage:
             if url.startswith("/"):
                 url = self.url + url
 
-            if self.__page_exists(url):
+            self.__link_to_local_file(link, url)
+
+            if self.__should_ignore_url(url):
                 continue
 
             scrap_page = ScrapPage(url, self.depth_level + 1)
             scrap_page.save_page()
 
-    def __page_exists(self, url: str) -> bool:
+    def __should_ignore_url(self, url: str) -> bool:
+        base_url = urlparse(self.url).hostname.split(".")[1]
+        link_base_url = urlparse(url).hostname.split(".")[1]
+        if base_url != link_base_url:
+            return True
+
         file_name = self.__get_file_name(url) + ".html"
         return os.path.exists(file_name)
+
+    def __link_to_local_file(self, link: Tag, url: str) -> None:
+        domain_name = str(urlparse(url).hostname).split(".")[1]
+
+        new_url = self.__get_file_name(url) + ".html"
+        new_url = "." + new_url.replace(f"{ROOT_DIR}{self.path}/{domain_name}", "", 1)
+        link["href"] = new_url
+
+    @staticmethod
+    def __scroll_down_page(browser, speed: int = 50):
+        current_scroll_position, new_height = 0, 1
+        while current_scroll_position <= new_height:
+            current_scroll_position += speed
+            browser.execute_script("window.scrollTo(0, {});".format(current_scroll_position))
+            new_height = browser.execute_script("return document.body.scrollHeight")
