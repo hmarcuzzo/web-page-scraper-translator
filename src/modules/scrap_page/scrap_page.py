@@ -54,6 +54,9 @@ class ScrapPage:
     def __save_html(self) -> None:
         file_name = self.__get_file_name()
 
+        if os.path.exists(file_name + ".html"):
+            return
+
         dir_path = os.path.dirname(file_name)
         os.makedirs(dir_path, exist_ok=True)
 
