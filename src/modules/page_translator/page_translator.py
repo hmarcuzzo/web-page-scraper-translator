@@ -4,16 +4,17 @@ import logging
 import os
 import shutil
 import time
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import List
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 
-import requests
 from bs4 import BeautifulSoup
 from bs4.element import Comment, NavigableString
+from googletrans import Translator
 
-from config import MS_TRANSLATOR_ENDPOINT, MS_TRANSLATOR_KEY, MS_TRANSLATOR_REGION, ROOT_DIR
+from config import (
+    ROOT_DIR,
+)
 from src.core.constants.default_values import TARGET_LANGUAGE
 
 
@@ -21,19 +22,11 @@ class PageTranslator:
     def __init__(
         self,
         url: str,
-        from_language: str = "",
         target_lang: str = TARGET_LANGUAGE,
         path: str = "/static/pages",
     ):
-        self.constructed_url = urljoin(MS_TRANSLATOR_ENDPOINT, "/translate")
-
-        self.params = {"api-version": "3.0", "from": from_language, "to": [target_lang]}
-        self.headers = {
-            "Ocp-Apim-Subscription-Key": MS_TRANSLATOR_KEY,
-            "Ocp-Apim-Subscription-Region": MS_TRANSLATOR_REGION,
-            "Content-type": "application/json",
-            "X-ClientTraceId": str(uuid.uuid4()),
-        }
+        self.target_lang = target_lang
+        self.translator = Translator()
 
         self.files = self.__get_files_of_type(url, path)
 
@@ -62,9 +55,6 @@ class PageTranslator:
                         f"File translated: {file} in {str(datetime.timedelta(seconds=time.time() - start))}"
                     )
 
-        # with ThreadPoolExecutor() as executor:
-        #     executor.map(translate_file, files)
-
         for f in files:
             translate_file(f)
 
@@ -82,22 +72,26 @@ class PageTranslator:
 
     def __translate_texts(self, texts: List[NavigableString]) -> None:
         def translate_text(element: NavigableString) -> None:
-            text = element.strip()
+            while True:
+                try:
+                    translated_text = self.translator.translate(
+                        text=element.strip(), dest=self.target_lang
+                    ).text
+                    break
+                except Exception as e:
+                    logging.error(e)
+                    logging.info("Retrying...")
+                    time.sleep(1)
 
-            body = [{"text": element.strip()}]
-            response = requests.post(
-                self.constructed_url,
-                params=self.params,
-                headers=self.headers,
-                json=body,
-            )
-            response.raise_for_status()
+            element.replace_with(translated_text)
 
-            translation = response.json()[0]["translations"][0]["text"]
-            element.replace_with(translation)
+        # with ThreadPoolExecutor() as executor:
+        #     executor.map(translate_text, texts)
 
-        with ThreadPoolExecutor() as executor:
-            executor.map(translate_text, texts)
+        text_len = len(texts)
+        for i, text in enumerate(texts):
+            translate_text(text)
+            logging.info(f"Translated {i}/{text_len}")
 
     @staticmethod
     def __tag_visible(element):

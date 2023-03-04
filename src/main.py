@@ -8,8 +8,9 @@ if __name__ == "__main__":
     # configure the logger
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
-    # scrap_page = ScrapPage(SCRAP_URL)
-    # scrap_page.save_page()
+    scrap_page = ScrapPage(SCRAP_URL)
+    scrap_page.save_page()
 
     page_translator = PageTranslator(SCRAP_URL)
     page_translator.translate_files()
+    # page_translator.delete_backup_files(SCRAP_URL, "/static/pages")
